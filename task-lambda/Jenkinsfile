@@ -1,0 +1,55 @@
+pipeline {
+    agent{ label 'terraform-lambda'}
+    environment {
+        AWS_ACCESS_KEY_ID     = credentials('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
+        AWS_DEFAULT_REGION    = 'eu-central-1'
+        TF_IN_AUTOMATION      = '1'
+        TF_lambda_zip_file    = 'app-${BUILD_NUMBER}.zip'
+        ZIP_MAX_SIZE_MB       = '500'
+    }
+    stages {
+        stage("Prepare Lambda Python Package") {
+            steps {
+                sh 'rm -rf ./dist'
+                sh 'pip3 install -r ./lambda/requirements.txt -t ./dist'
+                sh 'cp ./lambda/app ./dist'
+
+            }
+        }
+        stage("Zip Lambda Package") {
+            steps {
+                sh 'cd ./dist && zip -rm ${TF_lambda_zip_file} .'
+                sh(
+                '''
+                if [ $(du -ms ./dist/${TF_lambda_zip_file} | cut -f1) -gt ${ZIP_MAX_SIZE_MB} ]; then \
+                    echo $(du -ms ./dist/${TF_lambda_zip_file} | cut -f1) exceeds ${ZIP_MAX_SIZE_MB}MB; \
+                    false; \
+                fi
+                '''
+                )
+            }
+        }
+        stage('Terraform init & validate') {
+            steps {
+                sh (
+                '''
+                terraform init || exit 1
+                terraform validate || exit 1
+                '''
+                )
+            }
+        }
+        stage('Terraform plan') {
+            steps {
+                sh 'terraform plan || exit 1'
+            }
+        }
+        stage('Terraform Apply') {
+            steps {
+                sh 'terraform apply -input=false -auto-approve'
+            }
+        }
+    }
+}
+
