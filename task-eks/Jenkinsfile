@@ -1,0 +1,48 @@
+pipeline {
+    agent none
+    environment {
+        AWS_ACCESS_KEY_ID     = credentials('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
+        AWS_DEFAULT_REGION    = 'eu-central-1'
+        AWS_ACCOUNT_ID        = ''
+        ECR_REGION            = 'eu-central-1'
+        ECR_REPO_NAME         = 'flaskapp'
+    }
+    stages {
+        stage("Build and tag Docker Image") {
+            agent{ label 'Docker-builder'}
+            steps {
+                sh(
+                '''
+                docker build -t flaskapp .
+                aws configure set region ${ECR_REGION}
+                docker tag flaskapp:latest {AWS_ACCOUNT_ID}.dkr.ecr.${ECR_REGION}.amazonaws.com/${ECR_REPO_NAME}:latest
+                aws ecr get-login-password --region ${ECR_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${ECR_REGION}.amazonaws.com
+                '''
+                )
+            }
+          }
+        stage('Deploy app to eks') {
+            agent{ label 'eks-deploy'}
+            steps {
+                sh(
+                '''
+                export FLASK_ECR_IMAGE="{AWS_ACCOUNT_ID}.dkr.ecr.${ECR_REGION}.amazonaws.com/${ECR_REPO_NAME}:latest"
+                envsubst < eks/deployment.yml | kubectl apply -f -
+                '''
+                )
+            }
+        }
+        stage('Expose port 443') {
+            agent{ label 'eks-deploy'}
+            steps {
+                sh(
+                '''
+                kubectl create -f eks/service.yaml
+                kubectl expose deployment flaskapp-deployment  --type=LoadBalancer  --name=flaskapp-service-loadbalancer
+                '''
+                )
+            }
+        }
+    }
+}
