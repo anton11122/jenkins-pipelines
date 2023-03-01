@@ -81,5 +81,3 @@ variable "api_gateway_permissions_principal" {
   default = "apigateway.amazonaws.com"
   description = "The AWS service that the API Gateway belongs to and that is authorized to perform the action on the Lambda function."
 }
-
-

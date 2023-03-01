@@ -1,5 +1,4 @@
-
-# task-lambda
+# Task-lambda
 This folder contain :
 Jenkins declarative pipeline (Jenkinsfile)
 Terraform code to deploy a python based Lambda + S3 bucket + API gateway to AWS.
@@ -25,7 +24,5 @@ module "lambda" {
   
 }
 ```
-
-
 
 [Back](../README.md)
